@@ -1,10 +1,11 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PortfolioTab from "./PortfolioTab";
 import AddWalletTab from "./AddWalletTab";
-import { Wallet } from "lucide-react";
+import { Wallet, Loader2 } from "lucide-react";
+import { backendApi } from "@/data/api/backendApi";
+import { useToast } from "@/hooks/use-toast";
 
 export interface CryptoHolding {
   id: string;
@@ -18,8 +19,10 @@ export interface CryptoHolding {
 export interface WalletAddress {
   id: string;
   address: string;
-  type: 'ethereum' | 'solana';
+  type: 'ethereum' | 'solana' | 'bitcoin';
   label?: string;
+  inserted_at?: string;
+  updated_at?: string;
 }
 
 const WalletPortfolio = () => {
@@ -50,31 +53,50 @@ const WalletPortfolio = () => {
     }
   ]);
 
-  const [walletAddresses, setWalletAddresses] = useState<WalletAddress[]>([
-    {
-      id: "1",
-      address: "0x742d35Cc6634C0532925a3b8D6Ac6C77AF2AE532",
-      type: "ethereum",
-      label: "Main ETH Wallet"
-    },
-    {
-      id: "2",
-      address: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
-      type: "solana",
-      label: "Main SOL Wallet"
-    }
-  ]);
+  const [walletAddresses, setWalletAddresses] = useState<WalletAddress[]>([]);
+  const [isLoadingWallets, setIsLoadingWallets] = useState(true);
+  const { toast } = useToast();
 
   const totalPortfolioValue = cryptoHoldings.reduce((sum, holding) => sum + holding.totalValue, 0);
 
-  const addWalletAddress = (address: string, type: 'ethereum' | 'solana', label?: string) => {
+  // Fetch wallets from the database
+  const fetchWallets = async () => {
+    try {
+      setIsLoadingWallets(true);
+      const response = await backendApi.getWallets();
+      setWalletAddresses(response.wallets);
+    } catch (error) {
+      console.error('Failed to fetch wallets:', error);
+      toast({
+        title: "Failed to Load Wallets",
+        description: error instanceof Error ? error.message : "Unable to fetch wallet data",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingWallets(false);
+    }
+  };
+
+  // Load wallets when component mounts
+  useEffect(() => {
+    fetchWallets();
+  }, []);
+
+  const addWalletAddress = (address: string, type: 'ethereum' | 'solana' | 'bitcoin', label?: string) => {
+    // Optimistic update - add wallet to local state immediately
     const newWallet: WalletAddress = {
       id: Date.now().toString(),
       address,
       type,
-      label
+      label,
+      inserted_at: new Date().toISOString()
     };
-    setWalletAddresses(prev => [...prev, newWallet]);
+    setWalletAddresses(prev => [newWallet, ...prev]);
+    
+    // Refresh from database to get the real ID and ensure consistency
+    setTimeout(() => {
+      fetchWallets();
+    }, 500);
   };
 
   return (
@@ -110,17 +132,25 @@ const WalletPortfolio = () => {
             </CardHeader>
 
             <TabsContent value="portfolio" className="p-6 mt-0">
-              <PortfolioTab 
-                cryptoHoldings={cryptoHoldings}
-                totalValue={totalPortfolioValue}
-                walletAddresses={walletAddresses}
-              />
+              {isLoadingWallets ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                  <span className="text-gray-600">Loading wallets...</span>
+                </div>
+              ) : (
+                <PortfolioTab 
+                  cryptoHoldings={cryptoHoldings}
+                  totalValue={totalPortfolioValue}
+                  walletAddresses={walletAddresses}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="add-wallet" className="p-6 mt-0">
               <AddWalletTab 
                 onAddWallet={addWalletAddress}
                 existingWallets={walletAddresses}
+                isLoadingWallets={isLoadingWallets}
               />
             </TabsContent>
           </Tabs>
