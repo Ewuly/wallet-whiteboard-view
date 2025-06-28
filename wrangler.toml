@@ -1,0 +1,16 @@
+name = "wallet-whiteboard-view"
+compatibility_date = "2024-01-01"
+
+[build]
+command = "npm run build"
+
+# D1 Database Configuration
+[[d1_databases]]
+binding = "DB"
+database_name = "wallet-database"
+database_id = "10bfeb65-9927-474a-ae18-e63c3e3c983b"  # Actual database ID
+
+# Environment variables (optional)
+[vars]
+# Add any environment variables here if needed
+# EXAMPLE_VAR = "value" 
